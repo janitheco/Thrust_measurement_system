@@ -26,7 +26,7 @@ Feel free to modify the code to suit your specific needs. Contributions and impr
 
 License
 
-This project is open-source and available under the MIT License.
+This project is open-source and available under Creative Commons Zero v1.0 Universal.
 
 Contact
 
