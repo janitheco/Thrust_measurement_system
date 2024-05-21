@@ -1,160 +1,110 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+import RPi.GPIO as GPIO
+import time
+from datetime import datetime
+import csv
+from contextlib import redirect_stdout
+import threading
+import serial
 
-# C extensions
-*.so
+def setup_gpio(pin):
+    # Set the GPIO mode to BCM
+    GPIO.setmode(GPIO.BCM)
+    
+    # Set GPIO pin as an output
+    GPIO.setup(pin, GPIO.OUT)
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+def set_gpio_high(pin):
+    # Set GPIO pin to high
+    GPIO.output(pin, GPIO.HIGH)
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+def set_gpio_low(pin):
+    # Set GPIO pin to low
+    GPIO.output(pin, GPIO.LOW)
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+def main(offset, relay_on_time, interval, repetitions, gpio_pin, serial_flag):
+    try:
+        # Setup GPIO
+        setup_gpio(gpio_pin)
+        # Wait for the offset time
+        time.sleep(offset)
+        
+        for _ in range(repetitions):
+            # Set GPIO pin to high (relay on)
+            set_gpio_high(gpio_pin)
+            print(f"Thruster ON - GPIO pin {gpio_pin} set to HIGH")
+            
+            # Wait for the relay on time
+            time.sleep(relay_on_time)
+            
+            # Set GPIO pin to low (relay off)
+            set_gpio_low(gpio_pin)
+            print(f"Thruster OFF - GPIO pin {gpio_pin} set to LOW")
+            
+            # Wait for the interval time
+            time.sleep(interval)
+            
+        # Set the serial flag to indicate the relay control loop is done
+        serial_flag.set()
+            
+    except KeyboardInterrupt:
+        print("\nRelay control interrupted by user")
+        
+    finally:
+        # Clean up GPIO settings
+        GPIO.cleanup()
+        print("GPIO cleanup complete")
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+def serial_logger(serial_port, filename, serial_flag):
+    ser = serial.Serial(serial_port, baud_rate, timeout=2)
+    with open(filename, 'w') as f:
+        try:
+            while not serial_flag.is_set():
+                # Read data from the serial port
+                data = ser.readline().decode('ASCII').strip()
+                curr_time = datetime.now()
+                formatted_time = curr_time.strftime('%H:%M:%S.%f')
+                
+                # If data received, print it
+                if data:
+                    with redirect_stdout(f):
+                        print(formatted_time, "Received:", data)
+                        
+        except KeyboardInterrupt:
+            print("\nSerial logging interrupted by user")
+            
+        finally:
+            print("Closing the serial port.")
+            ser.close()
 
-# Translations
-*.mo
-*.pot
-
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
-
-# Flask stuff:
-instance/
-.webassets-cache
-
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-.pybuilder/
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
-
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
-
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
-
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
-
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/#use-with-ide
-.pdm.toml
-
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+if __name__ == "__main__":
+    # Define input parameters for relay control
+    offset = float(input("Enter offset time (seconds): "))
+    relay_on_time = float(input("Enter Burn time (seconds): "))
+    interval = float(input("Enter interval time (seconds): "))
+    repetitions = int(input("Enter number of repetitions: "))
+    gpio_pin = 27  # Adjust the GPIO pin as needed
+    
+    # Define input parameters for serial logging
+    serial_port = '/dev/ttyUSB0'
+    baud_rate = 38400
+    serial_filename = input("Enter the file name for serial output (e.g., output.csv): ")
+    
+    # Create a threading Event to signal the end of relay control loop
+    serial_flag = threading.Event()
+    
+    # Create threads for relay control and serial logging
+    relay_thread = threading.Thread(target=main, args=(offset, relay_on_time, interval, repetitions, gpio_pin, serial_flag))
+    serial_thread = threading.Thread(target=serial_logger, args=(serial_port, serial_filename, serial_flag))
+    
+    # Start both threads
+    relay_thread.start()
+    serial_thread.start()
+    
+    try:
+        # Wait for the relay control thread to finish
+        relay_thread.join()
+    except KeyboardInterrupt:
+        print("\nMain program interrupted by user")
+    
+    # Wait for the serial logging thread to finish
+    serial_thread.join()
